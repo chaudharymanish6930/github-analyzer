@@ -10,27 +10,27 @@ function App() {
   const [error, setError] = useState('');
   const [user, setUser] = useState(null);
 
-  // Check karo ki kya user logged-in hai ya nahi
   useEffect(() => {
     axios.get('http://localhost:5000/api/current-user', { withCredentials: true })
       .then(res => {
-        if (res.data.success) {
-          setUser(res.data.user);
-          // Agar user login hai, toh uska khud ka username daalkar profile fetch kar lo
-          fetchProfile(res.data.user.username);
+        if (res.data.success && res.data.user) {
+          const loggedInUser = res.data.user;
+          setUser(loggedInUser);
+          fetchProfileData(loggedInUser.username);
         }
       })
-      .catch(err => console.log("User not logged in"));
+      .catch(err => console.log("Guest mode active"));
   }, []);
 
-  const fetchProfile = async (targetUser) => {
+  const fetchProfileData = async (targetUsername) => {
+    if (!targetUsername) return;
     setLoading(true);
     setError('');
     try {
-      const response = await axios.get(`http://localhost:5000/api/github/${targetUser}`);
+      const response = await axios.get(`http://localhost:5000/api/github/${targetUsername.trim().toLowerCase()}`);
       setProfileData(response.data.data);
     } catch (err) {
-      setError('Profile data load karne me error aa gaya!');
+      setError(err.response?.data?.message || 'Profile load karne me error aa gaya!');
     } finally {
       setLoading(false);
     }
@@ -44,101 +44,126 @@ function App() {
     window.location.href = 'http://localhost:5000/auth/logout';
   };
 
-  const handleSearch = async (e) => {
+  const handleSearchSubmit = (e) => {
     e.preventDefault();
     if (!username.trim()) return;
-    fetchProfile(username);
+    fetchProfileData(username);
   };
 
   const chartData = profileData ? [
     { name: 'Repos', count: profileData.public_repos },
     { name: 'Followers', count: profileData.followers },
-    { name: 'Following', count: profileData.following }
+    { name: 'Following', count: profileData.following },
+    { name: 'Stars', count: profileData.totalStars || 0 }
   ] : [];
 
   return (
     <div className="app-container">
       
-      {/* Top Navbar / Auth Section */}
-      <div style={{ width: '100%', maxWidth: '500px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-        <h3 style={{ color: '#38bdf8', fontSize: '1rem', margin: 0 }}>
-          {user ? `Welcome, ${user.displayName || user.username}! 🎉` : 'Guest Mode'}
-        </h3>
+      <header className="app-header">
+        <div className="logo-area">
+          <h2>⚡ GitPulse Dashboard</h2>
+        </div>
+        <div className="auth-area">
+          {user ? (
+            <div className="user-badge">
+              <img src={user.avatarUrl} alt="avatar" className="user-avatar-sm" />
+              <span>{user.displayName || user.username}</span>
+              <button onClick={handleLogout} className="logout-btn">Logout</button>
+            </div>
+          ) : (
+            <button onClick={handleLogin} className="github-login-btn">
+              <svg height="20" width="20" viewBox="0 0 16 16" fill="#fff"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.22 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path></svg>
+              Login with GitHub
+            </button>
+          )}
+        </div>
+      </header>
 
-        {user ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: '#1e293b', padding: '6px 12px', borderRadius: '12px', border: '1px solid #334155' }}>
-            <img src={user.avatarUrl} alt="avatar" style={{ width: '30px', height: '30px', borderRadius: '50%' }} />
-            <button onClick={handleLogout} style={{ background: '#ef4444', border: 'none', color: '#fff', padding: '4px 10px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: '600' }}>Logout</button>
-          </div>
-        ) : (
-          <button onClick={handleLogin} style={{ background: '#24292e', color: '#fff', border: '1px solid #475569', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            Login with GitHub
+      <div className="hero-section">
+        <h1>{user ? `Welcome to Your Dashboard, ${user.displayName || user.username}!` : 'GitHub Profile Analyzer'}</h1>
+        <p>{user ? 'Here is your live GitHub analytics summary. You can also search any other developer profile below.' : 'Search any developer profile to inspect repositories, followers, and deep GitHub metrics instantly.'}</p>
+        
+        <form onSubmit={handleSearchSubmit} className="search-box-wrapper">
+          <input
+            type="text"
+            placeholder={user ? "Search any other GitHub username..." : "Enter GitHub username (e.g., torvalds, octocat)..."}
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            className="modern-search-input"
+          />
+          <button type="submit" className="modern-search-btn">
+            {user ? 'Search Profile' : 'Analyze'}
           </button>
+        </form>
+
+        {user && (
+          <div style={{ marginTop: '12px' }}>
+            <button 
+              onClick={() => fetchProfileData(user.username)} 
+              style={{ background: 'transparent', border: '1px solid #38bdf8', color: '#38bdf8', padding: '6px 14px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.85rem' }}
+            >
+              View My Dashboard Stats
+            </button>
+          </div>
         )}
       </div>
 
-      <h1 className="main-title">GitHub Profile Analyzer</h1>
-      
-      {/* Search Form */}
-      <form onSubmit={handleSearch} className="search-form">
-        <input
-          type="text"
-          placeholder="Enter GitHub Username to search..."
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-          className="search-input"
-        />
-        <button type="submit" className="search-btn">
-          Search
-        </button>
-      </form>
+      {loading && (
+        <div className="loader-container">
+          <div className="spinner"></div>
+          <p>Fetching profile metrics...</p>
+        </div>
+      )}
 
-      {loading && <p style={{ color: '#38bdf8' }}>Analyzing profile & loading graphs...</p>}
-      {error && <p className="error-msg">{error}</p>}
+      {error && <div className="error-banner">{error}</div>}
 
       {profileData && (
-        <div style={{ width: '100%', maxWidth: '500px', display: 'flex', flexDirection: 'column', gap: '20px', marginTop: '10px' }}>
-          <div className="profile-card">
-            <div className="profile-header">
-              <img src={profileData.avatar_url} alt="Avatar" className="avatar" />
-              <div className="profile-info">
+        <div className="results-container">
+          <div className="profile-card-modern">
+            <div className="profile-top">
+              <img src={profileData.avatar_url} alt="Avatar" className="profile-avatar-lg" />
+              <div className="profile-meta">
                 <h2>{profileData.name || profileData.login}</h2>
-                <p>@{profileData.login}</p>
+                <a href={profileData.html_url} target="_blank" rel="noreferrer" className="username-link">
+                  @{profileData.login} ↗
+                </a>
+                <p className="profile-bio">{profileData.bio || 'No public bio provided for this profile.'}</p>
               </div>
             </div>
 
-            <p className="bio">{profileData.bio || 'No bio available for this profile.'}</p>
-
-            <div className="stats-grid">
-              <div className="stat-item">
-                <span>Followers</span>
-                <strong>{profileData.followers}</strong>
+            <div className="stats-cards-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
+              <div className="stat-box">
+                <span className="stat-label">Repositories</span>
+                <span className="stat-value">{profileData.public_repos}</span>
               </div>
-              <div className="stat-item">
-                <span>Following</span>
-                <strong>{profileData.following}</strong>
+              <div className="stat-box">
+                <span className="stat-label">Followers</span>
+                <span className="stat-value">{profileData.followers}</span>
               </div>
-              <div className="stat-item">
-                <span>Repositories</span>
-                <strong>{profileData.public_repos}</strong>
+              <div className="stat-box">
+                <span className="stat-label">Following</span>
+                <span className="stat-value">{profileData.following}</span>
+              </div>
+              <div className="stat-box">
+                <span className="stat-label">Total Stars</span>
+                <span className="stat-value">{profileData.totalStars || 0}</span>
               </div>
             </div>
-
-            <a href={profileData.html_url} target="_blank" rel="noreferrer" className="visit-btn">
-              View GitHub Profile
-            </a>
           </div>
 
-          <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: '20px', padding: '20px', width: '100%' }}>
-            <h3 style={{ color: '#f8fafc', marginBottom: '15px', fontSize: '1.1rem', textAlign: 'center' }}>Profile Overview Chart</h3>
-            <div style={{ width: '100%', height: 220 }}>
-              <ResponsiveContainer>
+          <div className="chart-card-modern">
+            <h3>GitHub Metrics Overview</h3>
+            <div className="chart-wrapper">
+              <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={chartData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
                   <XAxis dataKey="name" stroke="#94a3b8" />
                   <YAxis stroke="#94a3b8" />
-                  <Tooltip contentStyle={{ background: '#0f172a', border: '1px solid #334155', borderRadius: '8px', color: '#fff' }} />
-                  <Bar dataKey="count" fill="#38bdf8" radius={[6, 6, 0, 0]} />
+                  <Tooltip 
+                    contentStyle={{ background: '#0f172a', border: '1px solid #334155', borderRadius: '10px', color: '#f8fafc' }} 
+                  />
+                  <Bar dataKey="count" fill="#38bdf8" radius={[8, 8, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
